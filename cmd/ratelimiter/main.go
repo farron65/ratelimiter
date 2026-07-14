@@ -1,22 +1,68 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"sync"
 
 	"github.com/farron65/ratelimiter/tokenbucket"
 )
+const defaultMaxTokens = 10
+const defaultRefillRate = 1
 
-func checkHandler(tb *tokenbucket.TokenBucket) http.HandlerFunc {
+type ClientLimiter struct {
+	mu sync.Mutex
+	clients map[string]*tokenbucket.TokenBucket
+}
+
+func newClientLimiter() *ClientLimiter {
+	return &ClientLimiter{clients: make(map[string]*tokenbucket.TokenBucket)}
+}
+
+func (cl *ClientLimiter) getBucket(ip string) *tokenbucket.TokenBucket {
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+
+	tb, exists := cl.clients[ip]
+	if !exists {
+		newTb := tokenbucket.NewTokenBucket(defaultMaxTokens, defaultRefillRate)
+		cl.clients[ip] = newTb
+		return newTb
+	}
+	return tb
+}
+
+func getIP(r *http.Request) (string, error) {
+	forwarded := r.Header.Get("X-FORWARDED-FOR")
+	if forwarded != "" {
+		return forwarded, nil
+	}
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+
+	if err != nil {
+		return "", errors.New("Invalid Ip Address")
+	}
+	userIP := net.ParseIP(ip)
+	if userIP == nil {
+		return "", errors.New("Invalid Ip Address")
+	}
+	return ip, nil
+}
+
+func checkHandler(cl *ClientLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if tb.Allow() {
+		userIP, err := getIP(r)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "Error: %s", err.Error())
+			return
+		}
+		if cl.getBucket(userIP).Allow() {
 			fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
 		} else {
-			// fmt.Fprintf(w, "Too many requests, wait for token bucket to fill up") 
-			// w.WriteHeader(http.StatusTooManyRequests) <---- This won't work because header must be sent first
-
-			//
 			w.WriteHeader(http.StatusTooManyRequests)
 			fmt.Fprintf(w, "Too many requests, wait for token bucket to fill up")
 		}
@@ -26,8 +72,8 @@ func checkHandler(tb *tokenbucket.TokenBucket) http.HandlerFunc {
 func main() {
 	fmt.Println("Hi")
 
-	tb := tokenbucket.NewTokenBucket(10, 1)
+	// tb := tokenbucket.NewTokenBucket(10, 0.1)
 
-	http.HandleFunc("/", checkHandler(tb))
+	http.HandleFunc("/", checkHandler(newClientLimiter()))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
