@@ -36,18 +36,14 @@ func (cl *ClientLimiter) getBucket(ip string) *tokenbucket.TokenBucket {
 }
 
 func getIP(r *http.Request) (string, error) {
-	forwarded := r.Header.Get("X-FORWARDED-FOR")
-	if forwarded != "" {
-		return forwarded, nil
-	}
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 
 	if err != nil {
-		return "", errors.New("Invalid Ip Address")
+		return "", errors.New("invalid IP Address")
 	}
 	userIP := net.ParseIP(ip)
 	if userIP == nil {
-		return "", errors.New("Invalid Ip Address")
+		return "", errors.New("invalid IP Address")
 	}
 	return ip, nil
 }
