@@ -13,6 +13,7 @@ type RedisBucket struct {
 	rd *redis.Client
 	maxTokens int
 	refillRate float64 
+	ttl time.Duration
 }
 
 type BucketState struct {
@@ -38,6 +39,7 @@ func NewRedisBucket(addr string, maxTokens int, refillRate float64) *RedisBucket
 			}),
 		maxTokens: maxTokens,
 		refillRate: refillRate,
+		ttl: time.Second * time.Duration(float64(maxTokens) / refillRate),
 	}
 }
 
@@ -77,7 +79,7 @@ func (rb *RedisBucket) Allow(ip string) (bool, error) {
 		return false, fmt.Errorf("malformed json")
 	}
 
-	er := rb.rd.Set(ctx, key, serializedState, 0).Err()
+	er := rb.rd.Set(ctx, key, serializedState, rb.ttl).Err()
 	if er != nil {
 		return false, fmt.Errorf("redis set failed: %w", er)
 	}
