@@ -11,28 +11,6 @@ import (
 const defaultMaxTokens = 10
 const defaultRefillRate = 1
 
-// type ClientLimiter struct {
-// 	mu sync.Mutex
-// 	clients map[string]*tokenbucket.TokenBucket
-// }
-
-// func newClientLimiter() *ClientLimiter {
-// 	return &ClientLimiter{clients: make(map[string]*tokenbucket.TokenBucket)}
-// }
-
-// func (cl *ClientLimiter) getBucket(ip string) *tokenbucket.TokenBucket {
-// 	cl.mu.Lock()
-// 	defer cl.mu.Unlock()
-
-// 	tb, exists := cl.clients[ip]
-// 	if !exists {
-// 		newTb := tokenbucket.NewTokenBucket(defaultMaxTokens, defaultRefillRate)
-// 		cl.clients[ip] = newTb
-// 		return newTb
-// 	}
-// 	return tb
-// }
-
 func getIP(r *http.Request) (string, error) {
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 
