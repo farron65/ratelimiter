@@ -34,6 +34,7 @@ func checkHandler(rb *redisbucket.RedisBucket) http.HandlerFunc {
 		}
 		b, er := rb.Allow(userIP) 
 		if er != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "Error %s!", er.Error())
 		} else if b {
 			fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
