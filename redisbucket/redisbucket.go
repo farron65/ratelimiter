@@ -2,12 +2,18 @@ package redisbucket
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	_ "embed"
 )
+
+//go:embed scripts/allow.lua
+var allowScript string
+
+var allowScriptObj = redis.NewScript(allowScript)
 
 type RedisBucket struct {
 	rd *redis.Client
@@ -16,19 +22,6 @@ type RedisBucket struct {
 	ttl time.Duration
 }
 
-type BucketState struct {
-	Tokens float64 `json:"tokens"`
-	LastRefillTime time.Time `json:"lastRefillTime"`
-}
-
-func (state *BucketState) Refill(rb *RedisBucket) {
-	elapsedTime := time.Since(state.LastRefillTime)
-
-	tokensToAdd := elapsedTime.Seconds() * rb.refillRate
-
-	state.Tokens = min(float64 (rb.maxTokens), state.Tokens + tokensToAdd)
-	state.LastRefillTime = time.Now()
-}
 
 func NewRedisBucket(addr string, maxTokens int, refillRate float64) *RedisBucket {
 	return &RedisBucket{
@@ -47,43 +40,21 @@ func (rb *RedisBucket) Allow(ip string) (bool, error) {
 	ctx := context.Background()
 	key := "ratelimit:" + ip
 
-	var state BucketState
+	now := float64(time.Now().UnixNano()) / 1e9
+	ttlSeconds := rb.ttl.Seconds()
 
-	val, err := rb.rd.Get(ctx, key).Result()
-
-	if err == redis.Nil {
-		state = BucketState{
-			Tokens: float64(rb.maxTokens),
-			LastRefillTime: time.Now(),
-		}
-	} else if err != nil {
-		return false, fmt.Errorf("redis get failed: %w", err)
-	} else {
-		err := json.Unmarshal([]byte(val), &state)
-		if err != nil {
-			return false, fmt.Errorf("malformed JSON")
-		}
-	}
-
-	state.Refill(rb)
-
-	allowed := false
-	if state.Tokens >= 1 {
-		state.Tokens--
-		allowed = true
-	}
-
-	serializedState, err := json.Marshal(state)
+	result, err := allowScriptObj.Run(ctx, rb.rd, []string{key}, now, rb.maxTokens, rb.refillRate, ttlSeconds).Result()
 
 	if err != nil {
-		return false, fmt.Errorf("malformed json")
+		return false, fmt.Errorf("redis script failed: %w", err)
 	}
 
-	er := rb.rd.Set(ctx, key, serializedState, rb.ttl).Err()
-	if er != nil {
-		return false, fmt.Errorf("redis set failed: %w", er)
+	allowed, ok := result.(int64)
+
+	if !ok {
+		return false, fmt.Errorf("unexpected script result type")
 	}
 
-	return allowed, nil
+	return allowed == 1, nil
 
 }
