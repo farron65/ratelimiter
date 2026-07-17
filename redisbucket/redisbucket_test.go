@@ -1,6 +1,8 @@
 package redisbucket_test
 
 import (
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -64,4 +66,45 @@ func TestAllowExpiredKey(t *testing.T) {
 	if mr.Exists(key) {
 		t.Fatal("Expected key to be expired after ttl")
 	}
+}
+
+func TestAllowConcurrencySingleRedisBucket(t *testing.T) {
+
+	mr, err := miniredis.Run()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer mr.Close()
+
+	rdb := redisbucket.NewRedisBucket(mr.Addr(), 10, 0)
+
+	var wg sync.WaitGroup
+
+	var successCount atomic.Int64
+
+	for range 25 {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+			b, err := rdb.Allow("1.1.1.1")
+
+			if err != nil {
+				t.Error(err.Error())
+			}
+			if b {
+				t.Log(b)
+				successCount.Add(1)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if successCount.Load() != 10 {
+		t.Errorf("expected %d, instead got %d", 10, successCount.Load())
+	}
+
 }
