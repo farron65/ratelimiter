@@ -18,7 +18,7 @@ func TestCheckHandlerTooManyRequests(t *testing.T) {
 
 	defer mr.Close()
 
-	rd := redisbucket.NewRedisBucket(mr.Addr(), 1, 0)
+	rd := redisbucket.NewRedisBucket(mr.Addr(), 1, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
@@ -40,7 +40,7 @@ func TestCheckHandlerTooManyRequests(t *testing.T) {
 
 func TestCheckHandlerBadIP(t *testing.T) {
 
-	rd := redisbucket.NewRedisBucket("1.1.1.1", 1, 0)
+	rd := redisbucket.NewRedisBucket("1.1.1.1", 1, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
@@ -64,7 +64,7 @@ func TestCheckHandlerRedisError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rb := redisbucket.NewRedisBucket(mr.Addr(), 1, 0)
+	rb := redisbucket.NewRedisBucket(mr.Addr(), 1, 1)
 	mr.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)

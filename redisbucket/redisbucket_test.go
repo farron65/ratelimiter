@@ -20,7 +20,7 @@ func TestAllow(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket(mr.Addr(), 10, 0)
+	rdb := redisbucket.NewRedisBucket(mr.Addr(), 10, 1)
 
 	successCount := 0
 
@@ -78,7 +78,7 @@ func TestAllowConcurrencySingleRedisBucket(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket(mr.Addr(), 10, 0)
+	rdb := redisbucket.NewRedisBucket(mr.Addr(), 10, 1)
 
 	var wg sync.WaitGroup
 
