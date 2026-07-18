@@ -35,7 +35,7 @@ func TestAllow(t *testing.T) {
 	}
 
 	if successCount != 10 {
-		t.Errorf("supposed to get: %d, instead got: %d", 10, successCount)
+		t.Errorf("expected to get: %d, instead got: %d", 10, successCount)
 	}
 }
 
@@ -59,13 +59,80 @@ func TestAllowExpiredKey(t *testing.T) {
 	key := "ratelimit:1.1.1.1"
 
 	if !mr.Exists(key) {
-		t.Fatal("Expected key to exist after Allow()")
+		t.Fatal("expected key to exist after Allow()")
 	}
 
 	mr.FastForward(20 * time.Second)
 	if mr.Exists(key) {
-		t.Fatal("Expected key to be expired after ttl")
+		t.Fatal("expected key to be expired after ttl")
 	}
+
+	successCount := 0
+
+	for range 10 {
+		b, err := rdb.Allow("1.1.1.1")
+
+		if err != nil {
+			t.Errorf("got an error: %s", err.Error())
+		} else if b {
+			successCount++
+		}
+	}
+
+	if successCount != 10 {
+		t.Errorf("expected to get: %d, instead got: %d", 10, successCount)
+	}
+}
+
+func TestAllowPartialRefill(t *testing.T) {
+	mr, err := miniredis.Run()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer mr.Close()
+
+	rdb := redisbucket.NewRedisBucket(mr.Addr(), 10, 1)
+
+	fixedTime := time.Now()
+
+	rdb.SetClock(func() time.Time {return fixedTime})
+
+	successCount := 0
+
+	for range 10 {
+		_, err := rdb.Allow("1.1.1.1")
+
+		if err != nil {
+			t.Error(err.Error())
+		}
+	}
+
+	b, err := rdb.Allow("1.1.1.1")
+
+	if b {
+		t.Errorf("expected to get: %t, instead got: %t", false, b)
+	}
+
+	rdb.SetClock(func() time.Time {return fixedTime.Add(5 * time.Second)})
+
+	tokensExpectedToHave := 5
+
+	for range 10 {
+		b, err := rdb.Allow("1.1.1.1")
+
+		if err != nil {
+			t.Error(err.Error())
+		} else if b {
+			successCount++
+		}
+	}
+
+	if successCount != tokensExpectedToHave {
+		t.Errorf("expected %d, instead got %d", tokensExpectedToHave, successCount)
+	}
+
 }
 
 func TestAllowConcurrencySingleRedisBucket(t *testing.T) {
@@ -95,7 +162,6 @@ func TestAllowConcurrencySingleRedisBucket(t *testing.T) {
 				t.Error(err.Error())
 			}
 			if b {
-				t.Log(b)
 				successCount.Add(1)
 			}
 		}()
@@ -106,5 +172,4 @@ func TestAllowConcurrencySingleRedisBucket(t *testing.T) {
 	if successCount.Load() != 10 {
 		t.Errorf("expected %d, instead got %d", 10, successCount.Load())
 	}
-
 }

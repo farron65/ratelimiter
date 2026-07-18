@@ -20,8 +20,8 @@ type RedisBucket struct {
 	maxTokens int
 	refillRate float64 
 	ttl time.Duration
+	now func() time.Time
 }
-
 
 func NewRedisBucket(addr string, maxTokens int, refillRate float64) *RedisBucket {
 	return &RedisBucket{
@@ -33,14 +33,19 @@ func NewRedisBucket(addr string, maxTokens int, refillRate float64) *RedisBucket
 		maxTokens: maxTokens,
 		refillRate: refillRate,
 		ttl: time.Second * time.Duration(float64(maxTokens) / refillRate),
+		now: time.Now,
 	}
+}
+
+func (rdb * RedisBucket) SetClock(fn func() time.Time) {
+	rdb.now = fn
 }
 
 func (rb *RedisBucket) Allow(ip string) (bool, error) {
 	ctx := context.Background()
 	key := "ratelimit:" + ip
 
-	now := float64(time.Now().UnixNano()) / 1e9
+	now := float64(rb.now().UnixNano()) / 1e9
 	ttlSeconds := rb.ttl.Seconds()
 
 	result, err := allowScriptObj.Run(ctx, rb.rd, []string{key}, now, rb.maxTokens, rb.refillRate, ttlSeconds).Result()
