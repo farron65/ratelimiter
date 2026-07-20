@@ -103,13 +103,17 @@ func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucke
 			return
 		}
 
+		var bucket *redisbucket.RedisBucket
+
 		var b bool
 
 		if strings.HasPrefix(r.URL.Path, "/login") || strings.HasPrefix(r.URL.Path, "/signup") {
-			b, err = authBucket.Allow(userIP)
+			bucket = authBucket
 		} else {
-			b, err = generalBucket.Allow(userIP)
+			bucket = generalBucket
 		}
+
+		b, err = bucket.Allow(userIP)
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -119,6 +123,9 @@ func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucke
 		} else if b {
 			proxy.ServeHTTP(w, r)
 		} else {
+
+			w.Header().Set("Retry-After", strconv.Itoa(bucket.SecondsToNextToken()))
+
 			w.WriteHeader(http.StatusTooManyRequests)
 			slogger.Info("rate limit exceeded", "ip", r.RemoteAddr)
 

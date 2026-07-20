@@ -3,6 +3,7 @@ package redisbucket
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -64,4 +65,8 @@ func (rb *RedisBucket) Allow(ip string) (bool, error) {
 
 	return allowed == 1, nil
 
+}
+
+func (rb *RedisBucket) SecondsToNextToken() int {
+	return int(math.Ceil(1 / rb.refillRate))
 }
