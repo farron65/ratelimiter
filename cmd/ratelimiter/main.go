@@ -17,8 +17,68 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// for general endpoints
 const defaultMaxTokens = 10
 const defaultRefillRate = 1
+
+// for auth endpoints
+const defaultAuthMaxTokens = 5
+const defaultAuthRefillRate = 0.01
+
+type Config struct {
+	maxTokens  int
+	refillRate float64
+
+	backendURL string
+
+	authMaxTokens  int
+	authRefillRate float64
+}
+
+func loadConfig(slogger *slog.Logger) *Config {
+	maxTokens, err := strconv.Atoi(os.Getenv("MAX_TOKENS"))
+	if err != nil {
+		slogger.Warn("invalid env variable", "MAX_TOKENS", os.Getenv("MAX_TOKENS"))
+		maxTokens = defaultMaxTokens
+	}
+
+	refillRate, err := strconv.ParseFloat(os.Getenv("REFILL_RATE"), 64)
+
+	if err != nil {
+		slogger.Warn("invalid env variable", "REFILL_RATE", os.Getenv("REFILL_RATE"))
+		refillRate = defaultRefillRate
+	}
+
+	backendURL := os.Getenv("BACKEND_URL")
+
+	if backendURL == "" {
+		slogger.Warn("invalid backend url", "BACKEND_URL", backendURL)
+		log.Fatal("BACKEND_URL is required")
+	}
+
+	authMaxTokens, err := strconv.Atoi(os.Getenv("AUTH_MAX_TOKENS"))
+	if err != nil {
+		slogger.Warn("invalid env variable", "AUTH_MAX_TOKENS", os.Getenv("AUTH_MAX_TOKENS"))
+		authMaxTokens = defaultAuthMaxTokens
+	}
+
+	authRefillRate, err := strconv.ParseFloat(os.Getenv("AUTH_REFILL_RATE"), 64)
+
+	if err != nil {
+		slogger.Warn("invalid env variable", "AUTH_REFILL_RATE", os.Getenv("AUTH_REFILL_RATE"))
+		authRefillRate = defaultAuthRefillRate
+	}
+
+	return &Config{
+		maxTokens: maxTokens,
+		refillRate: refillRate,
+
+		backendURL: backendURL,
+
+		authMaxTokens: authMaxTokens,
+		authRefillRate: authRefillRate,
+	}
+}
 
 func getIP(r *http.Request) (string, error) {
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -43,7 +103,7 @@ func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucke
 			return
 		}
 
-		var b bool;
+		var b bool
 
 		if strings.HasPrefix(r.URL.Path, "/login") || strings.HasPrefix(r.URL.Path, "/signup") {
 			b, err = authBucket.Allow(userIP)
@@ -67,23 +127,6 @@ func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucke
 	}
 }
 
-func loadConfig(slogger *slog.Logger) (int, float64) {
-	maxTokens, err := strconv.Atoi(os.Getenv("MAX_TOKENS"))
-	if err != nil {
-		slogger.Warn("invalid env variable", "MAX_TOKENS", os.Getenv("MAX_TOKENS"))
-		maxTokens = defaultMaxTokens
-	}
-
-	refillRate, err := strconv.ParseFloat(os.Getenv("REFILL_RATE"), 64)
-
-	if err != nil {
-		slogger.Warn("invalid env variable", "REFILL_RATE", os.Getenv("REFILL_RATE"))
-		refillRate = defaultRefillRate
-	}
-
-	return maxTokens, refillRate
-}
-
 func main() {
 	fmt.Println("Hi")
 
@@ -95,12 +138,12 @@ func main() {
 
 	slogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
-	maxTokens, refillRate := loadConfig(slogger)
+	configVars := loadConfig(slogger)
 
-	generalBucket := redisbucket.NewRedisBucket("general", "localhost:6379", maxTokens, refillRate)
-	authBucket := redisbucket.NewRedisBucket("auth", "localhost:6379", 5, 0.05)
+	generalBucket := redisbucket.NewRedisBucket("general", "localhost:6379", configVars.maxTokens, configVars.refillRate)
+	authBucket := redisbucket.NewRedisBucket("auth", "localhost:6379", configVars.authMaxTokens, configVars.authRefillRate)
 
-	target, err := url.Parse("http://127.0.0.1:8000")
+	target, err := url.Parse(configVars.backendURL)
 
 	if err != nil {
 		log.Fatal(err)
