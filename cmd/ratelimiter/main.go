@@ -4,8 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
+	"os"
+
 	"github.com/farron65/ratelimiter/redisbucket"
 )
 const defaultMaxTokens = 10
@@ -24,23 +27,28 @@ func getIP(r *http.Request) (string, error) {
 	return ip, nil
 }
 
-func checkHandler(rb *redisbucket.RedisBucket) http.HandlerFunc {
+func checkHandler(rb *redisbucket.RedisBucket, slogger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userIP, err := getIP(r)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "Error: invalid IP Address",)
+			slogger.Warn("invalid ip address", "error", err.Error(), "ip", r.RemoteAddr)
+			fmt.Fprintln(w, "Error: invalid IP Address",)
 			return
 		}
-		b, er := rb.Allow(userIP) 
-		if er != nil {
+		b, err := rb.Allow(userIP) 
+		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Error %s!", er.Error())
+			slogger.Error("redis error", "error", err, "ip", r.RemoteAddr)
+
+			fmt.Fprintln(w, "Internal server error!")
 		} else if b {
 			fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
 		} else {
 			w.WriteHeader(http.StatusTooManyRequests)
-			fmt.Fprintf(w, "Too many requests, wait for token bucket to fill up")
+			slogger.Info("rate limit exceeded","ip", r.RemoteAddr)
+
+			fmt.Fprintln(w, "Too many requests, wait for token bucket to fill up")
 		}
 	}
 }
@@ -50,6 +58,8 @@ func main() {
 
 	rb := redisbucket.NewRedisBucket("localhost:6379", defaultMaxTokens, defaultRefillRate)
 
-	http.HandleFunc("/", checkHandler(rb))
+	slogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	http.HandleFunc("/", checkHandler(rb, slogger))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
