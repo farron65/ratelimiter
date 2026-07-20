@@ -1,6 +1,7 @@
 package redisbucket_test
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -20,7 +21,7 @@ func TestAllow(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket(mr.Addr(), 10, 1)
+	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
 
 	successCount := 0
 
@@ -48,7 +49,7 @@ func TestAllowExpiredKey(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket(mr.Addr(), 10, 1)
+	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
 
 	_, err = rdb.Allow("1.1.1.1")
 
@@ -56,7 +57,8 @@ func TestAllowExpiredKey(t *testing.T) {
 		t.Error(err.Error())
 	}
 
-	key := "ratelimit:1.1.1.1"
+	key := fmt.Sprintf("ratelimit:%s:%s", "testing", "1.1.1.1")
+
 
 	if !mr.Exists(key) {
 		t.Fatal("expected key to exist after Allow()")
@@ -93,7 +95,7 @@ func TestAllowPartialRefill(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket(mr.Addr(), 10, 1)
+	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
 
 	fixedTime := time.Now()
 
@@ -145,7 +147,7 @@ func TestAllowConcurrencySingleRedisBucket(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket(mr.Addr(), 10, 1)
+	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
 
 	var wg sync.WaitGroup
 

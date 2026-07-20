@@ -16,6 +16,7 @@ var allowScript string
 var allowScriptObj = redis.NewScript(allowScript)
 
 type RedisBucket struct {
+	keyPrefix string
 	rd *redis.Client
 	maxTokens int
 	refillRate float64 
@@ -23,8 +24,9 @@ type RedisBucket struct {
 	now func() time.Time
 }
 
-func NewRedisBucket(addr string, maxTokens int, refillRate float64) *RedisBucket {
+func NewRedisBucket(keyPrefix string, addr string, maxTokens int, refillRate float64) *RedisBucket {
 	return &RedisBucket{
+		keyPrefix: keyPrefix,
 		rd: redis.NewClient(&redis.Options{
 				Addr: addr,
 				Password: "",
@@ -43,7 +45,7 @@ func (rdb * RedisBucket) SetClock(fn func() time.Time) {
 
 func (rb *RedisBucket) Allow(ip string) (bool, error) {
 	ctx := context.Background()
-	key := "ratelimit:" + ip
+	key := fmt.Sprintf("ratelimit:%s:%s", rb.keyPrefix, ip)
 
 	now := float64(rb.now().UnixNano()) / 1e9
 	ttlSeconds := rb.ttl.Seconds()
