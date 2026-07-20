@@ -1,8 +1,10 @@
 package main
 
 import (
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -18,12 +20,15 @@ func TestCheckHandlerTooManyRequests(t *testing.T) {
 
 	defer mr.Close()
 
-	rd := redisbucket.NewRedisBucket(mr.Addr(), 1, 1)
+	rdb := redisbucket.NewRedisBucket(mr.Addr(), 1, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 
-	handler := checkHandler(rd)
+	slogger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+
+	handler := checkHandler(rdb, slogger)
+
 
 	handler(rec, req)
 
@@ -40,14 +45,16 @@ func TestCheckHandlerTooManyRequests(t *testing.T) {
 
 func TestCheckHandlerBadIP(t *testing.T) {
 
-	rd := redisbucket.NewRedisBucket("1.1.1.1", 1, 1)
+	rdb := redisbucket.NewRedisBucket("1.1.1.1", 1, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 
 	req.RemoteAddr = "a-bad-ip-address"
 
-	handler := checkHandler(rd)
+	slogger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+
+	handler := checkHandler(rdb, slogger)
 
 	handler(rec, req)
 
@@ -64,13 +71,16 @@ func TestCheckHandlerRedisError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rb := redisbucket.NewRedisBucket(mr.Addr(), 1, 1)
+	rdb := redisbucket.NewRedisBucket(mr.Addr(), 1, 1)
 	mr.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 
-	handler := checkHandler(rb)
+	slogger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+
+	handler := checkHandler(rdb, slogger)
+
 
 	handler(rec, req)
 
