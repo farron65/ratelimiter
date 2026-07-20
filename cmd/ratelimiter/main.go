@@ -15,7 +15,7 @@ func getIP(r *http.Request) (string, error) {
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 
 	if err != nil {
-		return "", errors.New("invalid IP Address")
+		return "", err
 	}
 	userIP := net.ParseIP(ip)
 	if userIP == nil {
@@ -29,7 +29,7 @@ func checkHandler(rb *redisbucket.RedisBucket) http.HandlerFunc {
 		userIP, err := getIP(r)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "Error: %s", err.Error())
+			fmt.Fprintf(w, "Error: invalid IP Address",)
 			return
 		}
 		b, er := rb.Allow(userIP) 
