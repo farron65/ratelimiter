@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"testing"
 
@@ -20,14 +22,29 @@ func TestCheckHandlerTooManyRequests(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket(mr.Addr(), 1, 1)
+	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 1, 1)
+	rdb2 := redisbucket.NewRedisBucket("testing2", mr.Addr(), 1, 1)
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	defer backend.Close()
+
+	target, err := url.Parse(backend.URL)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(target)
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 
 	slogger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 
-	handler := checkHandler(rdb, slogger)
+	handler := checkHandler(rdb, rdb2, slogger, proxy)
 
 
 	handler(rec, req)
@@ -45,7 +62,22 @@ func TestCheckHandlerTooManyRequests(t *testing.T) {
 
 func TestCheckHandlerBadIP(t *testing.T) {
 
-	rdb := redisbucket.NewRedisBucket("1.1.1.1", 1, 1)
+	rdb := redisbucket.NewRedisBucket("testing", "1.1.1.1", 1, 1)
+	rdb2 := redisbucket.NewRedisBucket("testing2", "1.1.1.1", 1, 1)
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	defer backend.Close()
+
+	target, err := url.Parse(backend.URL)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(target)
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
@@ -54,7 +86,7 @@ func TestCheckHandlerBadIP(t *testing.T) {
 
 	slogger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 
-	handler := checkHandler(rdb, slogger)
+	handler := checkHandler(rdb, rdb2, slogger, proxy)
 
 	handler(rec, req)
 
@@ -70,17 +102,32 @@ func TestCheckHandlerRedisError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	
+	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 1, 1)
+	rdb2 := redisbucket.NewRedisBucket("testing2", mr.Addr(), 1, 1)
 
-	rdb := redisbucket.NewRedisBucket(mr.Addr(), 1, 1)
-	mr.Close()
+	mr.Close() // Close redis, since we are try to imitate the scenario when redis is down
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	defer backend.Close()
+
+	target, err := url.Parse(backend.URL)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(target)
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 
 	slogger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 
-	handler := checkHandler(rdb, slogger)
-
+	handler := checkHandler(rdb, rdb2, slogger, proxy)
 
 	handler(rec, req)
 

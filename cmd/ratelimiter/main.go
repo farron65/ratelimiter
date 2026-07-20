@@ -7,8 +7,11 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/farron65/ratelimiter/redisbucket"
 	"github.com/joho/godotenv"
@@ -30,7 +33,7 @@ func getIP(r *http.Request) (string, error) {
 	return ip, nil
 }
 
-func checkHandler(rb *redisbucket.RedisBucket, slogger *slog.Logger) http.HandlerFunc {
+func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucket.RedisBucket, slogger *slog.Logger, proxy *httputil.ReverseProxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userIP, err := getIP(r)
 		if err != nil {
@@ -39,14 +42,22 @@ func checkHandler(rb *redisbucket.RedisBucket, slogger *slog.Logger) http.Handle
 			fmt.Fprintln(w, "Error: invalid IP Address")
 			return
 		}
-		b, err := rb.Allow(userIP)
+
+		var b bool;
+
+		if strings.HasPrefix(r.URL.Path, "/login") || strings.HasPrefix(r.URL.Path, "/signup") {
+			b, err = authBucket.Allow(userIP)
+		} else {
+			b, err = generalBucket.Allow(userIP)
+		}
+
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			slogger.Error("redis error", "error", err, "ip", r.RemoteAddr)
 
 			fmt.Fprintln(w, "Internal server error!")
 		} else if b {
-			fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
+			proxy.ServeHTTP(w, r)
 		} else {
 			w.WriteHeader(http.StatusTooManyRequests)
 			slogger.Info("rate limit exceeded", "ip", r.RemoteAddr)
@@ -86,8 +97,17 @@ func main() {
 
 	maxTokens, refillRate := loadConfig(slogger)
 
-	rb := redisbucket.NewRedisBucket("localhost:6379", maxTokens, refillRate)
+	generalBucket := redisbucket.NewRedisBucket("general", "localhost:6379", maxTokens, refillRate)
+	authBucket := redisbucket.NewRedisBucket("auth", "localhost:6379", 5, 0.05)
 
-	http.HandleFunc("/", checkHandler(rb, slogger))
+	target, err := url.Parse("http://127.0.0.1:8000")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(target)
+
+	http.HandleFunc("/", checkHandler(generalBucket, authBucket, slogger, proxy))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
