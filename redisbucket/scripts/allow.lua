@@ -32,4 +32,4 @@ end
 local serializedState = cjson.encode(state)
 
 redis.call('SET', key, serializedState, 'EX', ttl)
-return allowed
+return {allowed, state.tokens}
