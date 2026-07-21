@@ -32,6 +32,7 @@ func NewRedisBucket(keyPrefix string, addr string, maxTokens int, refillRate flo
 				Addr: addr,
 				Password: "",
 				DB: 0,
+				MaxRetries: 2,
 			}),
 		maxTokens: maxTokens,
 		refillRate: refillRate,
@@ -45,7 +46,10 @@ func (rdb * RedisBucket) SetClock(fn func() time.Time) {
 }
 
 func (rb *RedisBucket) Allow(ip string) (bool, int64, error) {
-	ctx := context.Background()
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
 	key := fmt.Sprintf("ratelimit:%s:%s", rb.keyPrefix, ip)
 
 	now := float64(rb.now().UnixNano()) / 1e9
