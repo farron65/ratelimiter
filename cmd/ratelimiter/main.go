@@ -114,10 +114,10 @@ func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucke
 		b, remainingTokens, err := bucket.Allow(userIP)
 
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			slogger.Error("redis error", "error", err, "ip", r.RemoteAddr)
 
-			fmt.Fprintln(w, "Internal server error!")
+			slogger.Error("redis error", "error", err, "ip", r.RemoteAddr)
+			proxy.ServeHTTP(w, r)
+			
 		} else if b {
 			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(bucket.MaxTokens()))
 			w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remainingTokens, 10))

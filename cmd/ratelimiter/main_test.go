@@ -95,7 +95,7 @@ func TestCheckHandlerBadIP(t *testing.T) {
 	}
 }
 
-func TestCheckHandlerRedisError(t *testing.T) {
+func TestRedisDownButRequestSucceeds(t *testing.T) {
 
 	mr, err := miniredis.Run()
 
@@ -131,7 +131,7 @@ func TestCheckHandlerRedisError(t *testing.T) {
 
 	handler(rec, req)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 }
