@@ -44,7 +44,7 @@ func (rdb * RedisBucket) SetClock(fn func() time.Time) {
 	rdb.now = fn
 }
 
-func (rb *RedisBucket) Allow(ip string) (bool, error) {
+func (rb *RedisBucket) Allow(ip string) (bool, int64, error) {
 	ctx := context.Background()
 	key := fmt.Sprintf("ratelimit:%s:%s", rb.keyPrefix, ip)
 
@@ -52,21 +52,34 @@ func (rb *RedisBucket) Allow(ip string) (bool, error) {
 	ttlSeconds := rb.ttl.Seconds()
 
 	result, err := allowScriptObj.Run(ctx, rb.rd, []string{key}, now, rb.maxTokens, rb.refillRate, ttlSeconds).Result()
-
 	if err != nil {
-		return false, fmt.Errorf("redis script failed: %w", err)
+		return false, 0, fmt.Errorf("redis script failed: %w", err)
 	}
 
-	allowed, ok := result.(int64)
+	resultSlice, ok := result.([]interface{})
+	if !ok {
+		return false, 0, fmt.Errorf("unexpected script result type")
+	}
+
+	firstValue, ok := resultSlice[0].(int64)
 
 	if !ok {
-		return false, fmt.Errorf("unexpected script result type")
+		return false, 0, fmt.Errorf("unexpected script result type")
 	}
 
-	return allowed == 1, nil
+	secondValue, ok := resultSlice[1].(int64)
+	if !ok {
+		return false, 0, fmt.Errorf("unexpected script result type")
+	}
+
+	return firstValue == 1, secondValue, nil
 
 }
 
 func (rb *RedisBucket) SecondsToNextToken() int {
 	return int(math.Ceil(1 / rb.refillRate))
+}
+
+func (rb *RedisBucket) MaxTokens() int {
+	return rb.maxTokens
 }
