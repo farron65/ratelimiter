@@ -3,7 +3,9 @@ package redisbucket
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -26,14 +28,23 @@ type RedisBucket struct {
 }
 
 func NewRedisBucket(keyPrefix string, addr string, maxTokens int, refillRate float64) *RedisBucket {
+	var opts *redis.Options
+
+	if strings.HasPrefix(addr, "redis://") || strings.HasPrefix(addr, "rediss://") {
+		var err error
+		opts, err = redis.ParseURL(addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		opts = &redis.Options{Addr: addr}
+	}	
+	
+	opts.MaxRetries = 2
+	
 	return &RedisBucket{
 		keyPrefix: keyPrefix,
-		rd: redis.NewClient(&redis.Options{
-			Addr:       addr,
-			Password:   "",
-			DB:         0,
-			MaxRetries: 2,
-		}),
+		rd: redis.NewClient(opts),
 		maxTokens:  maxTokens,
 		refillRate: refillRate,
 		ttl:        time.Second * time.Duration(float64(maxTokens)/refillRate),
