@@ -30,6 +30,7 @@ type Config struct {
 	refillRate float64
 
 	backendURL string
+	redisAddr string
 
 	authMaxTokens  int
 	authRefillRate float64
@@ -56,6 +57,13 @@ func loadConfig(slogger *slog.Logger) *Config {
 		log.Fatal("BACKEND_URL is required")
 	}
 
+	redisAddr := os.Getenv("REDIS_ADDR")
+
+	if redisAddr == "" {
+		slogger.Warn("invalid Redis address", "REDIS_ADDR", redisAddr)
+		log.Fatal("REDIS_ADDR is required")
+	}
+
 	authMaxTokens, err := strconv.Atoi(os.Getenv("AUTH_MAX_TOKENS"))
 	if err != nil {
 		slogger.Warn("invalid env variable", "AUTH_MAX_TOKENS", os.Getenv("AUTH_MAX_TOKENS"))
@@ -74,6 +82,7 @@ func loadConfig(slogger *slog.Logger) *Config {
 		refillRate: refillRate,
 
 		backendURL: backendURL,
+		redisAddr: redisAddr,
 
 		authMaxTokens: authMaxTokens,
 		authRefillRate: authRefillRate,
@@ -150,8 +159,8 @@ func main() {
 
 	configVars := loadConfig(slogger)
 
-	generalBucket := redisbucket.NewRedisBucket("general", "localhost:6379", configVars.maxTokens, configVars.refillRate)
-	authBucket := redisbucket.NewRedisBucket("auth", "localhost:6379", configVars.authMaxTokens, configVars.authRefillRate)
+	generalBucket := redisbucket.NewRedisBucket("general", configVars.redisAddr, configVars.maxTokens, configVars.refillRate)
+	authBucket := redisbucket.NewRedisBucket("auth", configVars.redisAddr, configVars.authMaxTokens, configVars.authRefillRate)
 
 	target, err := url.Parse(configVars.backendURL)
 
