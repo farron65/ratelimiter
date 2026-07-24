@@ -25,12 +25,16 @@ const defaultRefillRate = 1
 const defaultAuthMaxTokens = 5
 const defaultAuthRefillRate = 0.01
 
+const defaultPort = "8080"
+
 type Config struct {
 	maxTokens  int
 	refillRate float64
 
 	backendURL string
 	redisAddr string
+
+	port string
 
 	authMaxTokens  int
 	authRefillRate float64
@@ -64,6 +68,12 @@ func loadConfig(slogger *slog.Logger) *Config {
 		log.Fatal("REDIS_ADDR is required")
 	}
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		slogger.Warn("invalid env variable", "PORT", os.Getenv("PORT"))
+		port = defaultPort
+	}
+
 	authMaxTokens, err := strconv.Atoi(os.Getenv("AUTH_MAX_TOKENS"))
 	if err != nil {
 		slogger.Warn("invalid env variable", "AUTH_MAX_TOKENS", os.Getenv("AUTH_MAX_TOKENS"))
@@ -83,6 +93,8 @@ func loadConfig(slogger *slog.Logger) *Config {
 
 		backendURL: backendURL,
 		redisAddr: redisAddr,
+
+		port: port,
 
 		authMaxTokens: authMaxTokens,
 		authRefillRate: authRefillRate,
@@ -171,5 +183,5 @@ func main() {
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
 	http.HandleFunc("/", checkHandler(generalBucket, authBucket, slogger, proxy))
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":" + configVars.port, nil))
 }
