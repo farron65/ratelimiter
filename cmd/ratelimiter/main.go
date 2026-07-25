@@ -32,7 +32,7 @@ type Config struct {
 	refillRate float64
 
 	backendURL string
-	redisAddr string
+	redisAddr  string
 
 	port string
 
@@ -88,15 +88,15 @@ func loadConfig(slogger *slog.Logger) *Config {
 	}
 
 	return &Config{
-		maxTokens: maxTokens,
+		maxTokens:  maxTokens,
 		refillRate: refillRate,
 
 		backendURL: backendURL,
-		redisAddr: redisAddr,
+		redisAddr:  redisAddr,
 
 		port: port,
 
-		authMaxTokens: authMaxTokens,
+		authMaxTokens:  authMaxTokens,
 		authRefillRate: authRefillRate,
 	}
 }
@@ -138,7 +138,7 @@ func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucke
 
 			slogger.Error("redis error", "error", err, "ip", r.RemoteAddr)
 			proxy.ServeHTTP(w, r)
-			
+
 		} else if b {
 			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(bucket.MaxTokens()))
 			w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remainingTokens, 10))
@@ -182,6 +182,13 @@ func main() {
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
+	originalDirector := proxy.Rewrite
+
+	proxy.Rewrite = func(req *httputil.ProxyRequest) {
+		originalDirector(req)
+		req.Out.Host = target.Host
+	}
+
 	http.HandleFunc("/", checkHandler(generalBucket, authBucket, slogger, proxy))
-	log.Fatal(http.ListenAndServe(":" + configVars.port, nil))
+	log.Fatal(http.ListenAndServe(":"+configVars.port, nil))
 }
