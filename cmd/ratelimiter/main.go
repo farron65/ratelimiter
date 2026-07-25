@@ -180,14 +180,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(target)
-
-	originalDirector := proxy.Rewrite
-
-	proxy.Rewrite = func(req *httputil.ProxyRequest) {
-		originalDirector(req)
-		req.Out.Host = target.Host
-	}
+	proxy := &httputil.ReverseProxy{
+    Rewrite: func(r *httputil.ProxyRequest) {
+        r.SetURL(target)
+        r.Out.Host = target.Host
+    },
+}
 
 	http.HandleFunc("/", checkHandler(generalBucket, authBucket, slogger, proxy))
 	log.Fatal(http.ListenAndServe(":"+configVars.port, nil))
