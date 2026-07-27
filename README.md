@@ -70,14 +70,12 @@ Verified via `PoolStats`: single dial, no reconnect churn under load.
 ## Known Limitations
  
 - `allow.lua` can produce a non-integer TTL when `maxTokens / refillRate` isn't a whole number - needs a `math.floor`/`ceil` fix
-- `Retry-After` header is a static estimate based on refill rate, not live token state
 - Auth-path matching (`/login`, `/signup`) is hardcoded rather than configurable ([tracked in GitHub issues](#))
 - No `X-Forwarded-For` support yet (not currently needed by Tren Den my backend service)
 
 ## Next Steps
 - [ ] Sliding window rate-limiting algorithm (second algorithm alongside token bucket)
 - [ ] Configurable auth-path matching
-- [ ] Making `Retry-After` dynamic
 
 ## Tech Stack
 
