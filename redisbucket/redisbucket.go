@@ -56,7 +56,7 @@ func (rdb *RedisBucket) SetClock(fn func() time.Time) {
 	rdb.now = fn
 }
 
-func (rb *RedisBucket) Allow(ip string) (bool, int64, error) {
+func (rb *RedisBucket) Allow(ip string) (bool, float64, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -87,12 +87,13 @@ func (rb *RedisBucket) Allow(ip string) (bool, int64, error) {
 		return false, 0, fmt.Errorf("unexpected script result type")
 	}
 
-	return firstValue == 1, secondValue, nil
+	// scale down by 100 to undo the fixed-point encoding (see allow.lua)
+	return firstValue == 1, float64(secondValue) / 100, nil
 
 }
 
-func (rb *RedisBucket) SecondsToNextToken() int {
-	return int(math.Ceil(1 / rb.refillRate))
+func (rb *RedisBucket) SecondsToNextToken(availableTokens float64) int {
+	return int(math.Ceil((1 - availableTokens) / rb.refillRate))
 }
 
 func (rb *RedisBucket) MaxTokens() int {

@@ -32,4 +32,6 @@ end
 local serializedState = cjson.encode(state)
 
 redis.call('SET', key, serializedState, 'EX', ttl)
-return {allowed, state.tokens}
+
+-- x100 to keep 2 decimals through RESP truncation; divided back in redisbucket.go 
+return {allowed, math.floor(state.tokens * 100)} 

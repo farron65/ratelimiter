@@ -141,14 +141,14 @@ func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucke
 
 		} else if b {
 			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(bucket.MaxTokens()))
-			w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remainingTokens, 10))
+			w.Header().Set("X-RateLimit-Remaining", strconv.FormatFloat(remainingTokens, 'f', 2, 64))
 
 			proxy.ServeHTTP(w, r)
 		} else {
 
 			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(bucket.MaxTokens()))
-			w.Header().Set("Retry-After", strconv.Itoa(bucket.SecondsToNextToken()))
-			w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remainingTokens, 10))
+			w.Header().Set("Retry-After", strconv.Itoa(bucket.SecondsToNextToken(remainingTokens)))
+			w.Header().Set("X-RateLimit-Remaining", strconv.FormatFloat(remainingTokens, 'f', 2, 64))
 
 			w.WriteHeader(http.StatusTooManyRequests)
 			slogger.Info("rate limit exceeded", "ip", r.RemoteAddr)
