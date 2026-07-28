@@ -32,7 +32,8 @@ By default the service proxies requests to whatever `BACKEND_URL` points at, rat
 | `BACKEND_URL` | Backend the proxy forwards allowed requests to | `http://127.0.0.1:8000` |
 | `MAX_TOKENS` | Bucket capacity for general requests | `10` |
 | `REFILL_RATE` | Tokens refilled per second for general requests | `1` |
-| `AUTH_MAX_TOKENS` | Bucket capacity for auth-path requests (`/login, /signup`) | `5` |
+| `AUTH_PATHS` | Comma-separated list of exact paths routed to the auth bucket | `/login,/signup,/reset-password` |
+| `AUTH_MAX_TOKENS` | Bucket capacity for auth-path requests (`/login, /signup, or any other auth path`) | `5` |
 | `AUTH_REFILL_RATE` | Tokens refilled per second for auth-path requests | `0.01` |
  
 ## Architecture
@@ -69,12 +70,10 @@ Verified via `PoolStats`: single dial, no reconnect churn under load.
  
 ## Known Limitations
 
-- Auth-path matching (`/login`, `/signup`) is hardcoded rather than configurable ([tracked in GitHub issues](#))
 - No `X-Forwarded-For` support yet (not currently needed by Tren Den my backend service)
 
 ## Next Steps
 - [ ] Sliding window rate-limiting algorithm (second algorithm alongside token bucket)
-- [ ] Configurable auth-path matching
 
 ## Tech Stack
 
