@@ -68,8 +68,7 @@ If Redis is unreachable, the service fails **open** - requests are proxied throu
 Verified via `PoolStats`: single dial, no reconnect churn under load.
  
 ## Known Limitations
- 
-- `allow.lua` can produce a non-integer TTL when `maxTokens / refillRate` isn't a whole number - needs a `math.floor`/`ceil` fix
+
 - Auth-path matching (`/login`, `/signup`) is hardcoded rather than configurable ([tracked in GitHub issues](#))
 - No `X-Forwarded-For` support yet (not currently needed by Tren Den my backend service)
 
