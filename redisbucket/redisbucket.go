@@ -38,16 +38,16 @@ func NewRedisBucket(keyPrefix string, addr string, maxTokens int, refillRate flo
 		}
 	} else {
 		opts = &redis.Options{Addr: addr}
-	}	
-	
+	}
+
 	opts.MaxRetries = 2
-	
+
 	return &RedisBucket{
-		keyPrefix: keyPrefix,
-		rd: redis.NewClient(opts),
+		keyPrefix:  keyPrefix,
+		rd:         redis.NewClient(opts),
 		maxTokens:  maxTokens,
 		refillRate: refillRate,
-		ttl:        time.Second * time.Duration(float64(maxTokens)/refillRate),
+		ttl:        time.Second * time.Duration(math.Ceil(float64(maxTokens)/refillRate)),
 		now:        time.Now,
 	}
 }

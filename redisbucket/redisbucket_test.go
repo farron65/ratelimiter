@@ -59,7 +59,6 @@ func TestAllowExpiredKey(t *testing.T) {
 
 	key := fmt.Sprintf("ratelimit:%s:%s", "testing", "1.1.1.1")
 
-
 	if !mr.Exists(key) {
 		t.Fatal("expected key to exist after Allow()")
 	}
@@ -99,7 +98,7 @@ func TestAllowPartialRefill(t *testing.T) {
 
 	fixedTime := time.Now()
 
-	rdb.SetClock(func() time.Time {return fixedTime})
+	rdb.SetClock(func() time.Time { return fixedTime })
 
 	successCount := 0
 
@@ -117,7 +116,7 @@ func TestAllowPartialRefill(t *testing.T) {
 		t.Errorf("expected to get: %t, instead got: %t", false, b)
 	}
 
-	rdb.SetClock(func() time.Time {return fixedTime.Add(5 * time.Second)})
+	rdb.SetClock(func() time.Time { return fixedTime.Add(5 * time.Second) })
 
 	tokensExpectedToHave := 5
 
@@ -173,5 +172,31 @@ func TestAllowConcurrencySingleRedisBucket(t *testing.T) {
 
 	if successCount.Load() != 10 {
 		t.Errorf("expected %d, instead got %d", 10, successCount.Load())
+	}
+}
+
+func TestTTLCeiling(t *testing.T) {
+	mr, err := miniredis.Run()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer mr.Close()
+
+	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 3)
+
+	_, _, err = rdb.Allow("1.1.1.1")
+
+	if err != nil {
+		t.Error(err.Error())
+	}
+
+	mr.FastForward(3 * time.Second)
+
+	key := fmt.Sprintf("ratelimit:%s:%s", "testing", "1.1.1.1")
+
+	if !mr.Exists(key) {
+		t.Fatal("expected key to NOT be expired after ttl")
 	}
 }
