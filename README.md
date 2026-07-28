@@ -21,7 +21,9 @@ cp .env.example .env
 
 go run cmd/ratelimiter/main.go
 ```
+> **Note:** Start Redis before running the service (`redis-server`, or `docker run -p 6379:6379 redis`). If Redis isn't running, `REDIS_ADDR` will be unreachable and requests will silently succeed unrated (fail-open behavior) instead of erroring - so it can look like everything's working when nothing is actually being rate-limited.
 
+> Your backend (`BACKEND_URL`) also needs to be running, or the proxy has nothing to forward allowed requests to.
 
 By default the service proxies requests to whatever `BACKEND_URL` points at, rate-limiting them before they reach your backend.
  
@@ -51,7 +53,7 @@ Client → ratelimiter (Go) → Backend (e.g. Tren Den)
  
 ### Atomic operations via Lua scripting
  
-Redis read-refill-decrement-write logic runs as a single atomic Lua script (`redisbucket/scripts/allow.lua`) rather than as separate Redis calls. This was not a hypothetical concern - I ran a concurrency test and found out a race condition where a 25-token bucket allowed 10 extra requests (25 allowed instead of the expected limit) when hit with concurrent requests using naive check-then-decrement logic. Moving the logic into an atomic Lua script eliminated the overcount entirely, verified by the same test.
+Redis read-refill-decrement-write logic runs as a single atomic Lua script (`redisbucket/scripts/allow.lua`) rather than as separate Redis calls. I ran a concurrency test and found out a race condition where a 25-token bucket allowed 10 extra requests (25 allowed instead of the expected limit) when hit with concurrent requests using naive check-then-decrement logic. Moving the logic into an atomic Lua script eliminated the overcount entirely, verified by the same test.
  
 ### Fail-open on Redis failure
  
