@@ -158,6 +158,11 @@ func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucke
 	}
 }
 
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, "OK")
+}
+
 func main() {
 	fmt.Println("Hi")
 
@@ -181,11 +186,13 @@ func main() {
 	}
 
 	proxy := &httputil.ReverseProxy{
-    Rewrite: func(r *httputil.ProxyRequest) {
-        r.SetURL(target)
-        r.Out.Host = target.Host
-    },
-}
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(target)
+			r.Out.Host = target.Host
+		},
+	}
+
+	http.HandleFunc("/health", healthHandler)
 
 	http.HandleFunc("/", checkHandler(generalBucket, authBucket, slogger, proxy))
 	log.Fatal(http.ListenAndServe(":"+configVars.port, nil))
