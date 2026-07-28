@@ -36,6 +36,8 @@ type Config struct {
 
 	port string
 
+	authPaths map[string]struct{}
+
 	authMaxTokens  int
 	authRefillRate float64
 }
@@ -87,6 +89,18 @@ func loadConfig(slogger *slog.Logger) *Config {
 		authRefillRate = defaultAuthRefillRate
 	}
 
+	authPaths := make(map[string]struct{})
+
+	if os.Getenv("AUTH_PATHS") == "" {
+		slogger.Warn("AUTH_PATHS not set, using defaults", "AUTH_PATHS", os.Getenv("AUTH_PATHS"))
+		authPaths["/login"] = struct{}{}
+		authPaths["/signup"] = struct{}{}
+	} else {
+		for _, path := range strings.Split(os.Getenv("AUTH_PATHS"), ",") {
+			authPaths[path] = struct{}{}
+		}
+	}
+
 	return &Config{
 		maxTokens:  maxTokens,
 		refillRate: refillRate,
@@ -95,6 +109,8 @@ func loadConfig(slogger *slog.Logger) *Config {
 		redisAddr:  redisAddr,
 
 		port: port,
+
+		authPaths: authPaths,
 
 		authMaxTokens:  authMaxTokens,
 		authRefillRate: authRefillRate,
@@ -114,7 +130,17 @@ func getIP(r *http.Request) (string, error) {
 	return ip, nil
 }
 
-func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucket.RedisBucket, slogger *slog.Logger, proxy *httputil.ReverseProxy) http.HandlerFunc {
+func isAuthRoute(path string, authPaths map[string]struct{}) bool {
+
+	_, ok := authPaths[path]
+
+	if !ok {
+		return false
+	}
+	return true
+}
+
+func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucket.RedisBucket, slogger *slog.Logger, proxy *httputil.ReverseProxy, authPaths map[string]struct{}) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userIP, err := getIP(r)
 		if err != nil {
@@ -126,7 +152,7 @@ func checkHandler(generalBucket *redisbucket.RedisBucket, authBucket *redisbucke
 
 		var bucket *redisbucket.RedisBucket
 
-		if strings.HasPrefix(r.URL.Path, "/login") || strings.HasPrefix(r.URL.Path, "/signup") {
+		if isAuthRoute(r.URL.Path, authPaths) {
 			bucket = authBucket
 		} else {
 			bucket = generalBucket
@@ -194,6 +220,6 @@ func main() {
 
 	http.HandleFunc("/health", healthHandler)
 
-	http.HandleFunc("/", checkHandler(generalBucket, authBucket, slogger, proxy))
+	http.HandleFunc("/", checkHandler(generalBucket, authBucket, slogger, proxy, configVars.authPaths))
 	log.Fatal(http.ListenAndServe(":"+configVars.port, nil))
 }

@@ -44,8 +44,11 @@ func TestCheckHandlerTooManyRequests(t *testing.T) {
 
 	slogger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 
-	handler := checkHandler(rdb, rdb2, slogger, proxy)
+	authPaths := map[string]struct{} {
+		"/login": struct{}{},
+	}
 
+	handler := checkHandler(rdb, rdb2, slogger, proxy, authPaths)
 
 	handler(rec, req)
 
@@ -86,7 +89,11 @@ func TestCheckHandlerBadIP(t *testing.T) {
 
 	slogger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 
-	handler := checkHandler(rdb, rdb2, slogger, proxy)
+	authPaths := map[string]struct{} {
+		"/login": struct{}{},
+	}
+
+	handler := checkHandler(rdb, rdb2, slogger, proxy, authPaths)
 
 	handler(rec, req)
 
@@ -127,7 +134,11 @@ func TestRedisDownButRequestSucceeds(t *testing.T) {
 
 	slogger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 
-	handler := checkHandler(rdb, rdb2, slogger, proxy)
+	authPaths := map[string]struct{} {
+		"/login": struct{}{},
+	}
+
+	handler := checkHandler(rdb, rdb2, slogger, proxy, authPaths)
 
 	handler(rec, req)
 
