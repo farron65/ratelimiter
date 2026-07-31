@@ -58,7 +58,7 @@ func (swc *SlidingWindowCounter) Allow() bool {
 	elapsed := float64(now) - (float64(swc.windowID) * float64(swc.windowSize))
 	weight := ((float64(swc.windowSize) - elapsed) / float64(swc.windowSize))
 
-	estimatedCount := (weight) * float64(swc.prevCount) + float64(swc.currCount)
+	estimatedCount := weight * float64(swc.prevCount) + float64(swc.currCount)
 
 	if estimatedCount < float64(swc.limit) {
 		swc.currCount++

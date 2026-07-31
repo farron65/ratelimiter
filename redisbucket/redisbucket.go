@@ -89,7 +89,6 @@ func (rb *RedisBucket) Allow(ip string) (bool, float64, error) {
 
 	// scale down by 100 to undo the fixed-point encoding (see allow.lua)
 	return firstValue == 1, float64(secondValue) / 100, nil
-
 }
 
 func (rb *RedisBucket) SecondsToNextToken(availableTokens float64) int {
