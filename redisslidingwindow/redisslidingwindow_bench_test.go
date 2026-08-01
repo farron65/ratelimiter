@@ -44,6 +44,8 @@ func BenchmarkAllowRealRedis(b *testing.B) {
 func BenchmarkAllowRealRedisParallel(b *testing.B) {
 	rswc := redisslidingwindow.NewRedisSlidingWindowCounter("bench", "localhost:6379", 1000000, 1000000)
 
+	b.ResetTimer()
+
 	var counter atomic.Int64
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
