@@ -21,12 +21,12 @@ func TestAllow(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
+	rb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
 
 	successCount := 0
 
 	for range 50 {
-		b, _, err := rdb.Allow("1.1.1.1")
+		b, _, err := rb.Allow("1.1.1.1")
 
 		if err != nil {
 			t.Errorf("got an error: %s", err.Error())
@@ -49,9 +49,9 @@ func TestAllowExpiredKey(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
+	rb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
 
-	_, _, err = rdb.Allow("1.1.1.1")
+	_, _, err = rb.Allow("1.1.1.1")
 
 	if err != nil {
 		t.Error(err.Error())
@@ -71,7 +71,7 @@ func TestAllowExpiredKey(t *testing.T) {
 	successCount := 0
 
 	for range 10 {
-		b, _, err := rdb.Allow("1.1.1.1")
+		b, _, err := rb.Allow("1.1.1.1")
 
 		if err != nil {
 			t.Errorf("got an error: %s", err.Error())
@@ -94,34 +94,34 @@ func TestAllowPartialRefill(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
+	rb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
 
 	fixedTime := time.Now()
 
-	rdb.SetClock(func() time.Time { return fixedTime })
+	rb.SetClock(func() time.Time { return fixedTime })
 
 	successCount := 0
 
 	for range 10 {
-		_, _, err := rdb.Allow("1.1.1.1")
+		_, _, err := rb.Allow("1.1.1.1")
 
 		if err != nil {
 			t.Error(err.Error())
 		}
 	}
 
-	b, _, err := rdb.Allow("1.1.1.1")
+	b, _, err := rb.Allow("1.1.1.1")
 
 	if b {
 		t.Errorf("expected to get: %t, instead got: %t", false, b)
 	}
 
-	rdb.SetClock(func() time.Time { return fixedTime.Add(5 * time.Second) })
+	rb.SetClock(func() time.Time { return fixedTime.Add(5 * time.Second) })
 
 	tokensExpectedToHave := 5
 
 	for range 10 {
-		b, _, err := rdb.Allow("1.1.1.1")
+		b, _, err := rb.Allow("1.1.1.1")
 
 		if err != nil {
 			t.Error(err.Error())
@@ -146,7 +146,7 @@ func TestAllowConcurrencySingleRedisBucket(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
+	rb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 1)
 
 	var wg sync.WaitGroup
 
@@ -157,7 +157,7 @@ func TestAllowConcurrencySingleRedisBucket(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			b, _, err := rdb.Allow("1.1.1.1")
+			b, _, err := rb.Allow("1.1.1.1")
 
 			if err != nil {
 				t.Error(err.Error())
@@ -184,9 +184,9 @@ func TestTTLCeiling(t *testing.T) {
 
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 3)
+	rb := redisbucket.NewRedisBucket("testing", mr.Addr(), 10, 3)
 
-	_, _, err = rdb.Allow("1.1.1.1")
+	_, _, err = rb.Allow("1.1.1.1")
 
 	if err != nil {
 		t.Error(err.Error())

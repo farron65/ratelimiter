@@ -14,12 +14,12 @@ func BenchmarkAllow(b *testing.B) {
 	mr, _ := miniredis.Run()
 	defer mr.Close()
 
-	rdb := redisbucket.NewRedisBucket("bench", mr.Addr(), 1000000, 1000000)
+	rb := redisbucket.NewRedisBucket("bench", mr.Addr(), 1000000, 1000000)
 
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		_, _, err := rdb.Allow("1.1.1.1")
+		_, _, err := rb.Allow("1.1.1.1")
 
 		if err != nil {
 			b.Fatalf("got an error: %s", err.Error())
@@ -29,12 +29,12 @@ func BenchmarkAllow(b *testing.B) {
 
 func BenchmarkAllowRealRedis(b *testing.B) {
 
-	rdb := redisbucket.NewRedisBucket("bench", "localhost:6379", 1000000, 1000000)
+	rb := redisbucket.NewRedisBucket("bench", "localhost:6379", 1000000, 1000000)
 
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		_, _, err := rdb.Allow("1.1.1.1")
+		_, _, err := rb.Allow("1.1.1.1")
 
 		if err != nil {
 			b.Fatalf("got an error: %s", err.Error())
@@ -43,7 +43,7 @@ func BenchmarkAllowRealRedis(b *testing.B) {
 }
 
 func BenchmarkAllowRealRedisParallel(b *testing.B) {
-	rdb := redisbucket.NewRedisBucket("bench", "localhost:6379", 1000000, 1000000)
+	rb := redisbucket.NewRedisBucket("bench", "localhost:6379", 1000000, 1000000)
 
 	b.ResetTimer()
 
@@ -52,7 +52,7 @@ func BenchmarkAllowRealRedisParallel(b *testing.B) {
 		for pb.Next() {
 			id := counter.Add(1)
 	
-			_, _, err := rdb.Allow("10.0.0." + strconv.FormatInt(id, 10))
+			_, _, err := rb.Allow("10.0.0." + strconv.FormatInt(id, 10))
 	
 			if err != nil {
 				b.Fatal(err)
