@@ -52,8 +52,16 @@ func NewRedisBucket(keyPrefix string, addr string, maxTokens int, refillRate flo
 	}
 }
 
-func (rdb *RedisBucket) SetClock(fn func() time.Time) {
-	rdb.now = fn
+func (rb *RedisBucket) SetClock(fn func() time.Time) {
+	rb.now = fn
+}
+
+func (rb *RedisBucket) RetryAfterSeconds(remaining float64) int {
+	return rb.SecondsToNextToken(remaining)
+}
+
+func (rb *RedisBucket) Capacity() int {
+	return rb.maxTokens
 }
 
 func (rb *RedisBucket) Allow(ip string) (bool, float64, error) {
