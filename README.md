@@ -3,10 +3,12 @@
 **A production-style rate limiter written in Go, built as a standalone protective service and wired in front of Tren Den (a FastAPI workout tracker) as reverse-proxy middleware.**
 
 Supports two rate-limiting algorithms - token bucket and sliding window counter - each with in-memory and Redis-backed implementations, atomic Lua-scripted operations, graceful degradation on Redis failure, and rate-limit response headers.
+The algorithm is selectable at runtime via a single env var.
 
 ## Features
 - Token bucket rate limiting (in-memory and Redis-backed)
 - Sliding window counter rate limiting (in-memory and Redis-backed)
+- Runtime-selectable algorithm (`ALGORITHM=token_bucket` or `sliding_window`) behind a shared `Limiter` interface
 - Atomic Redis operations via Lua scripting (no race conditions under concurrent load)
 - Fail-open behavior on Redis outage (configurable timeout + retry policy)
 - Standard rate-limit headers (X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After)
@@ -26,25 +28,41 @@ go run cmd/ratelimiter/main.go
 
 > Your backend (`BACKEND_URL`) also needs to be running, or the proxy has nothing to forward allowed requests to.
 
-By default the service proxies requests to whatever `BACKEND_URL` points at, rate-limiting them before they reach your backend.
- 
+By default the service proxies requests to whatever `BACKEND_URL` points at, rate-limiting them before they reach your backend. The algorithm is chosen at startup via `ALGORITHM` (`token_bucket` or `sliding_window`, defaults to `token_bucket`) - only that algorithm's env vars are read, so the other algorithm's vars can be safely omitted from your environment (e.g. in a Render deployment).
+
 ### Configuration
  
 | Env Var | Description | Example |
 |---|---|---|
 | `BACKEND_URL` | Backend the proxy forwards allowed requests to | `http://127.0.0.1:8000` |
+| `REDIS_ADDR` | Redis connection address | `localhost:6379` |
+| `PORT` | Port the ratelimiter listens on | `8080` |
+| `ALGORITHM` | Which algorithm to use: `token_bucket` or `sliding_window` | `token_bucket` |
+| `AUTH_PATHS` | Comma-separated list of exact paths routed to the auth limiter | `/login,/signup,/reset-password` |
+
+**Token bucket** (read when `ALGORITHM=token_bucket`, or unset)
+
+| Env Var | Description | Example |
+|---|---|---|
 | `MAX_TOKENS` | Bucket capacity for general requests | `10` |
 | `REFILL_RATE` | Tokens refilled per second for general requests | `1` |
-| `AUTH_PATHS` | Comma-separated list of exact paths routed to the auth bucket | `/login,/signup,/reset-password` |
 | `AUTH_MAX_TOKENS` | Bucket capacity for auth-path requests (`/login, /signup, or any other auth path`) | `5` |
 | `AUTH_REFILL_RATE` | Tokens refilled per second for auth-path requests | `0.01` |
  
+**Sliding window** (read when `ALGORITHM=sliding_window`)
+| Env Var | Description | Example |
+|---|---|---|
+| `WINDOW_SIZE` | Window length in seconds for general requests | `60` |
+| `LIMIT` | Max requests per window for general requests | `10` |
+| `AUTH_WINDOW_SIZE` | Window length in seconds for auth-path requests | `60` |
+| `AUTH_LIMIT` | Max requests per window for auth-path requests | `5` |
+
 ## Architecture
  
 ```
 Client → ratelimiter (Go) → Backend (e.g. Tren Den)
               |
-              └── Redis (token state, atomic via Lua)
+              └── Redis (rate-limit state, atomic via Lua)
 ```
  
 - `tokenbucket/` - in-memory token bucket implementation
@@ -53,7 +71,8 @@ Client → ratelimiter (Go) → Backend (e.g. Tren Den)
 - `slidingwindow/` - in-memory sliding window counter implementation
 - `redisslidingwindow/` - Redis-backed sliding window counter, atomic via `scripts/allow.lua`
 
-- `cmd/ratelimiter/` - HTTP server / reverse proxy entrypoint
+- `cmd/ratelimiter/` - HTTP server / reverse proxy entrypoint, plus `limiter.go` defining the shared `Limiter` interface both algorithms implement
+
 ## Design Decisions
 
 ### Two algorithms: token bucket vs. sliding window counter
@@ -80,14 +99,11 @@ If Redis is unreachable, the service fails **open** - requests are proxied throu
 * Parallel benchmarks use a unique IP per request (via an atomic counter) so goroutines aren't contending for the same Redis key - this measures overall throughput rather than single-key lock contention.
 * These numbers are all localhost-to-localhost. In production (Render), real network latency between the service and Redis will be higher than shown here.
  
-Verified via `PoolStats`: single dial, no reconnect churn under load.
- 
+Verified via `PoolStats`: under `BenchmarkAllowRealRedisParallel` (~1mil requests, `GOMAXPROCS`-wide concurrency), `TotalConns` stabilized at one connection per concurrent worker and never grew further, `Misses` stayed flat at that same count for the entire run, and `Hits` climbed into the hundreds of thousands with zero `Timeouts` or `StaleConns` - i.e. the pool opens exactly as many connections as concurrent load requires, then reuses them with no further dials or churn.
+
 ## Known Limitations
 
 - No `X-Forwarded-For` support yet (not currently needed by Tren Den, my backend service)
-
-## Next Steps
-- [ ] Wire sliding window counter into the HTTP middleware as a selectable algorithm
 
 ## Tech Stack
 
