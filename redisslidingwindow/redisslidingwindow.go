@@ -56,21 +56,35 @@ func NewRedisSlidingWindowCounter(keyPrefix string, addr string, windowSize int6
 	}
 }
 
-
-func (rswc *RedisSlidingWindowCounter) SetClock(fn func() time.Time) {
-	rswc.now = fn
+func (sw *RedisSlidingWindowCounter) SetClock(fn func() time.Time) {
+	sw.now = fn
 }
 
-func (rswc *RedisSlidingWindowCounter) Allow(ip string) (bool, int64, error) {
+func (sw *RedisSlidingWindowCounter) RetryAfterSeconds(_ float64) int {
+	// remaining unused: sliding window's retry math is time-based, not count-based
+	now := sw.now().Unix()
+	windowID := now / sw.windowSize
+	windowStart := windowID * sw.windowSize
+	elapsed := now - windowStart
+	secondsLeft := float64(sw.windowSize - elapsed)
+
+	return int(secondsLeft)
+}
+
+func (sw *RedisSlidingWindowCounter) Capacity() int {
+	return int(sw.windowSize)
+}
+
+func (sw *RedisSlidingWindowCounter) Allow(ip string) (bool, float64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200 * time.Millisecond)
 	defer cancel()
 
-	key := fmt.Sprintf("ratelimit:%s:%s", rswc.keyPrefix, ip)
+	key := fmt.Sprintf("ratelimit:%s:%s", sw.keyPrefix, ip)
 
-	now := rswc.now().Unix()
-	ttlSeconds := rswc.ttl.Seconds()
+	now := sw.now().Unix()
+	ttlSeconds := sw.ttl.Seconds()
 
-	result, err := allowScriptObj.Run(ctx, rswc.rd, []string{key}, now, rswc.windowSize, rswc.limit, ttlSeconds).Result()
+	result, err := allowScriptObj.Run(ctx, sw.rd, []string{key}, now, sw.windowSize, sw.limit, ttlSeconds).Result()
 
 	if err != nil {
 		return false, 0, fmt.Errorf("redis script failed: %w", err)
@@ -92,6 +106,5 @@ func (rswc *RedisSlidingWindowCounter) Allow(ip string) (bool, int64, error) {
 		return false, 0, fmt.Errorf("unexpected script result type")
 	}
 
-	return isAllowed == 1, remaining, nil
-
+	return isAllowed == 1, float64(remaining), nil
 }
