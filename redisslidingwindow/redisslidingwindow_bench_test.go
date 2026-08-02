@@ -1,7 +1,7 @@
 package redisslidingwindow_test
 
 import (
-	"strconv"
+	"fmt"
 	"sync/atomic"
 	"testing"
 
@@ -44,17 +44,28 @@ func BenchmarkAllowRealRedis(b *testing.B) {
 func BenchmarkAllowRealRedisParallel(b *testing.B) {
 	sw := redisslidingwindow.NewRedisSlidingWindowCounter("bench", "localhost:6379", 1000000, 1000000)
 
-	b.ResetTimer()
+	var counter int64
 
-	var counter atomic.Int64
+	before := sw.PoolStats()
+
+	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			id := counter.Add(1)
-			_, _, err := sw.Allow("10.0.0." + strconv.FormatInt(id, 10))
+			n := atomic.AddInt64(&counter, 1)
+			ip := fmt.Sprintf("10.0.%d.%d", (n/256)%256, n%256)
+			_, _, err := sw.Allow(ip)
 
 			if err != nil {
 				b.Fatal(err)
 			}
 		}
 	})
+	b.StopTimer()
+
+	after := sw.PoolStats()
+
+	b.Logf("before: TotalConns=%d Hits=%d Misses=%d Timeouts=%d StaleConns=%d",
+		before.TotalConns, before.Hits, before.Misses, before.Timeouts, before.StaleConns)
+	b.Logf("after:  TotalConns=%d Hits=%d Misses=%d Timeouts=%d StaleConns=%d",
+		after.TotalConns, after.Hits, after.Misses, after.Timeouts, after.StaleConns)
 }

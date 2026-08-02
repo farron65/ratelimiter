@@ -64,6 +64,10 @@ func (rb *RedisBucket) Capacity() int {
 	return rb.maxTokens
 }
 
+func (rb *RedisBucket) PoolStats() *redis.PoolStats {
+    return rb.rd.PoolStats()
+}
+
 func (rb *RedisBucket) Allow(ip string) (bool, float64, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)

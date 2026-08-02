@@ -75,6 +75,10 @@ func (sw *RedisSlidingWindowCounter) Capacity() int {
 	return int(sw.windowSize)
 }
 
+func (sw *RedisSlidingWindowCounter) PoolStats() *redis.PoolStats {
+    return sw.rd.PoolStats()
+}
+
 func (sw *RedisSlidingWindowCounter) Allow(ip string) (bool, float64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200 * time.Millisecond)
 	defer cancel()
