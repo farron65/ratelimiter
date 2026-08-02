@@ -20,12 +20,12 @@ func TestAllow(t *testing.T) {
 
 	defer mr.Close()
 
-	rswc := redisslidingwindow.NewRedisSlidingWindowCounter("testing", mr.Addr(), 60, 10)
+	sw := redisslidingwindow.NewRedisSlidingWindowCounter("testing", mr.Addr(), 60, 10)
 
 	successCount := 0
 
 	for range 50 {
-		b, _, err := rswc.Allow("1.1.1.1")
+		b, _, err := sw.Allow("1.1.1.1")
 
 		if err != nil {
 			t.Errorf("got an error: %s", err.Error())
@@ -48,9 +48,9 @@ func TestAllowExpiredKey(t *testing.T) {
 
 	defer mr.Close()
 
-	rswc := redisslidingwindow.NewRedisSlidingWindowCounter("testing", mr.Addr(), 60, 10)
+	sw := redisslidingwindow.NewRedisSlidingWindowCounter("testing", mr.Addr(), 60, 10)
 
-	_, _, err = rswc.Allow("1.1.1.1")
+	_, _, err = sw.Allow("1.1.1.1")
 
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func TestAllowExpiredKey(t *testing.T) {
 	successCount := 0
 
 	for range 10 {
-		b, _, err := rswc.Allow("1.1.1.1")
+		b, _, err := sw.Allow("1.1.1.1")
 
 		if err != nil {
 			t.Errorf("got an error: %s", err.Error())
@@ -94,30 +94,30 @@ func TestAllowRolloverDecay(t *testing.T) {
 
 	defer mr.Close()
 
-	rswc := redisslidingwindow.NewRedisSlidingWindowCounter("testing", mr.Addr(), 60, 10)
+	sw := redisslidingwindow.NewRedisSlidingWindowCounter("testing", mr.Addr(), 60, 10)
 	
 	fixedTime := time.Unix(0, 0)
 
-	rswc.SetClock(func() time.Time { return fixedTime })
+	sw.SetClock(func() time.Time { return fixedTime })
 
 	for  range 10 {
-		_, _, err = rswc.Allow("1.1.1.1")
+		_, _, err = sw.Allow("1.1.1.1")
 		if err != nil {
 			t.Error(err.Error())
 		}
 	}
 
-	b, _, err := rswc.Allow("1.1.1.1")
+	b, _, err := sw.Allow("1.1.1.1")
 
 	if b {
 		t.Errorf("expected to get: %t, instead got: %t", false, b)
 	}
 
-	rswc.SetClock(func() time.Time {return fixedTime.Add(90 * time.Second)})
+	sw.SetClock(func() time.Time {return fixedTime.Add(90 * time.Second)})
 
 	remainingRequestsToHave := 4
 
-	b, gotRemaining, err := rswc.Allow("1.1.1.1")
+	b, gotRemaining, err := sw.Allow("1.1.1.1")
 
 	if err != nil {
 		t.Error(err.Error())
@@ -127,8 +127,8 @@ func TestAllowRolloverDecay(t *testing.T) {
 		t.Errorf("expected to get: %t, instead got: %t", true, b)
 	}
 
-	if gotRemaining != int64(remainingRequestsToHave) {
-		t.Errorf("expected %d, instead got %d", remainingRequestsToHave, gotRemaining)
+	if gotRemaining != float64(remainingRequestsToHave) {
+		t.Errorf("expected %d, instead got %f", remainingRequestsToHave, gotRemaining)
 	}
 }
 
@@ -142,7 +142,7 @@ func TestAllowConcurrencyRedisSingleSlidingWindow(t *testing.T) {
 
 	defer mr.Close()
 
-	rswc := redisslidingwindow.NewRedisSlidingWindowCounter("testing", mr.Addr(), 60, 10)
+	sw := redisslidingwindow.NewRedisSlidingWindowCounter("testing", mr.Addr(), 60, 10)
 
 	var wg sync.WaitGroup
 	var successCount atomic.Int64
@@ -152,7 +152,7 @@ func TestAllowConcurrencyRedisSingleSlidingWindow(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			b, _, err := rswc.Allow("1.1.1.1")
+			b, _, err := sw.Allow("1.1.1.1")
 			if err != nil {
 				t.Error(err.Error())
 			}
@@ -178,9 +178,9 @@ func TestTTLCeiling(t *testing.T) {
 
 	defer mr.Close()
 
-	rswc := redisslidingwindow.NewRedisSlidingWindowCounter("testing", mr.Addr(), 60, 10)
+	sw := redisslidingwindow.NewRedisSlidingWindowCounter("testing", mr.Addr(), 60, 10)
 
-	_, _, err = rswc.Allow("1.1.1.1")
+	_, _, err = sw.Allow("1.1.1.1")
 
 	if err != nil {
 		t.Fatal(err)
