@@ -72,7 +72,7 @@ func (sw *RedisSlidingWindowCounter) RetryAfterSeconds(_ float64) int {
 }
 
 func (sw *RedisSlidingWindowCounter) Capacity() int {
-	return int(sw.windowSize)
+	return int(sw.limit)
 }
 
 func (sw *RedisSlidingWindowCounter) PoolStats() *redis.PoolStats {
