@@ -1,0 +1,22 @@
+services:
+  redis:
+    image: redis:8-alpine
+    container_name: redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+  ratelimiter:
+    build: .    
+    ports:
+      - "10000:10000"
+    env_file:
+      - ".env"
+    environment:
+      REDIS_ADDR: redis:6379
+      BACKEND_URL: http://host.docker.internal:9000
+    depends_on:
+      redis:
+        condition: service_healthy
