@@ -16,6 +16,9 @@ import (
 	"github.com/farron65/ratelimiter/redisbucket"
 	"github.com/farron65/ratelimiter/redisslidingwindow"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // for general endpoints (token bucket)
@@ -46,6 +49,16 @@ type Config struct {
 	generalLimiter Limiter
 	authLimiter    Limiter
 }
+
+// Prometheus
+var requestsTotal = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "ratelimiter_requests_total",
+		Help: "Requests handled by the rate limiter, by result.",
+	},
+	[]string{"result"},
+)
+
 
 func loadConfig(slogger *slog.Logger) *Config {
 
@@ -209,12 +222,13 @@ func checkHandler(generalLimiter Limiter, authLimiter Limiter, slogger *slog.Log
 			proxy.ServeHTTP(w, r)
 
 		} else if b {
+			requestsTotal.WithLabelValues("allowed").Inc()
 			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limiter.Capacity()))
 			w.Header().Set("X-RateLimit-Remaining", strconv.FormatFloat(remainingTokens, 'f', 2, 64))
 
 			proxy.ServeHTTP(w, r)
 		} else {
-
+			requestsTotal.WithLabelValues("rejected").Inc()
 			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limiter.Capacity()))
 			w.Header().Set("Retry-After", strconv.Itoa(limiter.RetryAfterSeconds(remainingTokens)))
 			w.Header().Set("X-RateLimit-Remaining", strconv.FormatFloat(remainingTokens, 'f', 2, 64))
@@ -260,5 +274,6 @@ func main() {
 	http.HandleFunc("/health", healthHandler)
 
 	http.HandleFunc("/", checkHandler(configVars.generalLimiter, configVars.authLimiter, slogger, proxy, configVars.authPaths))
+	http.Handle("/metrics", promhttp.Handler())
 	log.Fatal(http.ListenAndServe(":"+configVars.port, nil))
 }
