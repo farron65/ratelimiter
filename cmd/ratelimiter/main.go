@@ -257,13 +257,6 @@ func isAuthRoute(path string, authPaths map[string]struct{}) bool {
 
 func checkHandler(generalLimiter Limiter, authLimiter Limiter, slogger *slog.Logger, proxy *httputil.ReverseProxy, authPaths map[string]struct{}, nets []*net.IPNet, header string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		slogger.Info("ip debug",
-		"remote_addr", r.RemoteAddr,
-		"xff", r.Header.Get("X-Forwarded-For"),
-		"true_client_ip", r.Header.Get("True-Client-IP"),
-		"cf_connecting_ip", r.Header.Get("CF-Connecting-IP"),
-		"x_real_ip", r.Header.Get("X-Real-IP"),
-		)
 		userIP, err := getIP(r, nets, header)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
