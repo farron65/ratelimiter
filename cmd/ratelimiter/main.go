@@ -49,6 +49,7 @@ type Config struct {
 	generalLimiter Limiter
 	authLimiter    Limiter
 	trustedProxies []*net.IPNet
+	clientIPHeader string
 }
 
 // Prometheus
@@ -177,6 +178,7 @@ func loadConfig(slogger *slog.Logger) *Config {
 		}
 	}
 
+	clientIPHeader := os.Getenv("CLIENT_IP_HEADER")
 	return &Config{
 		backendURL: backendURL,
 		redisAddr:  redisAddr,
@@ -186,6 +188,7 @@ func loadConfig(slogger *slog.Logger) *Config {
 		generalLimiter: generalLimiter,
 		authLimiter:    authLimiter,
 		trustedProxies: trustedProxies,
+		clientIPHeader: clientIPHeader,
 	}
 }
 
@@ -199,7 +202,7 @@ func isTrusted(ip net.IP, nets []*net.IPNet) bool {
 
 }
 
-func getIP(r *http.Request, nets []*net.IPNet) (string, error) {
+func getIP(r *http.Request, nets []*net.IPNet, header string) (string, error) {
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 
 	if err != nil {
@@ -214,6 +217,12 @@ func getIP(r *http.Request, nets []*net.IPNet) (string, error) {
 	// 1. peer not trusted -> ignore the header
 	if !isTrusted(userIP, nets) {
 		return ip, nil
+	}
+
+	if header != "" {
+		if v := net.ParseIP(strings.TrimSpace(r.Header.Get(header))); v != nil {
+			return v.String(), nil
+		}
 	}
 
 	// 2. peer trusted, no header -> nothing to read
@@ -246,7 +255,7 @@ func isAuthRoute(path string, authPaths map[string]struct{}) bool {
 	return true
 }
 
-func checkHandler(generalLimiter Limiter, authLimiter Limiter, slogger *slog.Logger, proxy *httputil.ReverseProxy, authPaths map[string]struct{}, nets []*net.IPNet) http.HandlerFunc {
+func checkHandler(generalLimiter Limiter, authLimiter Limiter, slogger *slog.Logger, proxy *httputil.ReverseProxy, authPaths map[string]struct{}, nets []*net.IPNet, header string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slogger.Info("ip debug",
 		"remote_addr", r.RemoteAddr,
@@ -255,7 +264,7 @@ func checkHandler(generalLimiter Limiter, authLimiter Limiter, slogger *slog.Log
 		"cf_connecting_ip", r.Header.Get("CF-Connecting-IP"),
 		"x_real_ip", r.Header.Get("X-Real-IP"),
 		)
-		userIP, err := getIP(r, nets)
+		userIP, err := getIP(r, nets, header)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			slogger.Warn("invalid ip address", "error", err.Error(), "remote_addr", r.RemoteAddr)
@@ -327,7 +336,7 @@ func main() {
 			r.Out.Host = target.Host
 			r.SetXForwarded()
 
-			if clientIP, err := getIP(r.In, configVars.trustedProxies); err == nil {
+			if clientIP, err := getIP(r.In, configVars.trustedProxies, configVars.clientIPHeader); err == nil {
 				r.Out.Header.Set("X-Forwarded-For", clientIP)
 			}
 		},
@@ -335,7 +344,7 @@ func main() {
 
 	http.HandleFunc("/health", healthHandler)
 
-	http.HandleFunc("/", checkHandler(configVars.generalLimiter, configVars.authLimiter, slogger, proxy, configVars.authPaths, configVars.trustedProxies))
+	http.HandleFunc("/", checkHandler(configVars.generalLimiter, configVars.authLimiter, slogger, proxy, configVars.authPaths, configVars.trustedProxies, configVars.clientIPHeader))
 	http.Handle("/metrics", promhttp.Handler())
 	log.Fatal(http.ListenAndServe(":"+configVars.port, nil))
 }

@@ -48,7 +48,7 @@ func TestCheckHandlerTooManyRequests(t *testing.T) {
 		"/login": struct{}{},
 	}
 
-	handler := checkHandler(rdb, rdb2, slogger, proxy, authPaths, nil)
+	handler := checkHandler(rdb, rdb2, slogger, proxy, authPaths, nil, "")
 
 	handler(rec, req)
 
@@ -93,7 +93,7 @@ func TestCheckHandlerBadIP(t *testing.T) {
 		"/login": struct{}{},
 	}
 
-	handler := checkHandler(rdb, rdb2, slogger, proxy, authPaths, nil)
+	handler := checkHandler(rdb, rdb2, slogger, proxy, authPaths, nil, "")
 
 	handler(rec, req)
 
@@ -138,7 +138,7 @@ func TestRedisDownButRequestSucceeds(t *testing.T) {
 		"/login": struct{}{},
 	}
 
-	handler := checkHandler(rdb, rdb2, slogger, proxy, authPaths, nil)
+	handler := checkHandler(rdb, rdb2, slogger, proxy, authPaths, nil, "")
 
 	handler(rec, req)
 
