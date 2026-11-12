@@ -48,6 +48,7 @@ type Config struct {
 
 	generalLimiter Limiter
 	authLimiter    Limiter
+	trustedProxies []*net.IPNet
 }
 
 // Prometheus
@@ -58,7 +59,6 @@ var requestsTotal = promauto.NewCounterVec(
 	},
 	[]string{"result"},
 )
-
 
 func loadConfig(slogger *slog.Logger) *Config {
 
@@ -162,6 +162,21 @@ func loadConfig(slogger *slog.Logger) *Config {
 		log.Fatalf("unknown ALGORITHM: %q (expected token_bucket or sliding_window)", algorithm)
 	}
 
+	rawProxies := os.Getenv("TRUSTED_PROXIES")
+	var trustedProxies []*net.IPNet
+	if rawProxies == "" {
+		slogger.Info("TRUSTED_PROXIES not set, ignoring X-Forwarded-For")
+	} else {
+		for _, s := range strings.Split(rawProxies, ",") {
+			_, ipnet, err := net.ParseCIDR(strings.TrimSpace(s))
+			if err != nil {
+				log.Fatalf("invalid TRUSTED_PROXIES entry %q: %v", s, err)
+			}
+			trustedProxies = append(trustedProxies, ipnet)
+
+		}
+	}
+
 	return &Config{
 		backendURL: backendURL,
 		redisAddr:  redisAddr,
@@ -170,18 +185,53 @@ func loadConfig(slogger *slog.Logger) *Config {
 
 		generalLimiter: generalLimiter,
 		authLimiter:    authLimiter,
+		trustedProxies: trustedProxies,
 	}
 }
 
-func getIP(r *http.Request) (string, error) {
+func isTrusted(ip net.IP, nets []*net.IPNet) bool {
+	for _, n := range nets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+
+}
+
+func getIP(r *http.Request, nets []*net.IPNet) (string, error) {
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 
 	if err != nil {
 		return "", err
 	}
+
 	userIP := net.ParseIP(ip)
 	if userIP == nil {
 		return "", errors.New("invalid IP Address")
+	}
+
+	// 1. peer not trusted -> ignore the header
+	if !isTrusted(userIP, nets) {
+		return ip, nil
+	}
+
+	// 2. peer trusted, no header -> nothing to read
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff == "" {
+		return ip, nil
+	}
+
+	parts := strings.Split(xff, ",")
+
+	for i := len(parts) - 1; i >= 0; i-- {
+		candidate := net.ParseIP(strings.TrimSpace(parts[i]))
+		if candidate == nil {
+			return ip, nil
+		}
+		if !isTrusted(candidate, nets) {
+			return candidate.String(), nil
+		}
 	}
 	return ip, nil
 }
@@ -196,9 +246,10 @@ func isAuthRoute(path string, authPaths map[string]struct{}) bool {
 	return true
 }
 
-func checkHandler(generalLimiter Limiter, authLimiter Limiter, slogger *slog.Logger, proxy *httputil.ReverseProxy, authPaths map[string]struct{}) http.HandlerFunc {
+func checkHandler(generalLimiter Limiter, authLimiter Limiter, slogger *slog.Logger, proxy *httputil.ReverseProxy, authPaths map[string]struct{}, nets []*net.IPNet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userIP, err := getIP(r)
+		userIP, err := getIP(r, nets)
+		// slogger.Info("resolved ip", "peer", r.RemoteAddr, "client", userIP)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			slogger.Warn("invalid ip address", "error", err.Error(), "ip", r.RemoteAddr)
@@ -273,7 +324,7 @@ func main() {
 
 	http.HandleFunc("/health", healthHandler)
 
-	http.HandleFunc("/", checkHandler(configVars.generalLimiter, configVars.authLimiter, slogger, proxy, configVars.authPaths))
+	http.HandleFunc("/", checkHandler(configVars.generalLimiter, configVars.authLimiter, slogger, proxy, configVars.authPaths, configVars.trustedProxies))
 	http.Handle("/metrics", promhttp.Handler())
 	log.Fatal(http.ListenAndServe(":"+configVars.port, nil))
 }
