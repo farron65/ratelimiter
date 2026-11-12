@@ -249,10 +249,9 @@ func isAuthRoute(path string, authPaths map[string]struct{}) bool {
 func checkHandler(generalLimiter Limiter, authLimiter Limiter, slogger *slog.Logger, proxy *httputil.ReverseProxy, authPaths map[string]struct{}, nets []*net.IPNet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userIP, err := getIP(r, nets)
-		// slogger.Info("resolved ip", "peer", r.RemoteAddr, "client", userIP)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			slogger.Warn("invalid ip address", "error", err.Error(), "ip", r.RemoteAddr)
+			slogger.Warn("invalid ip address", "error", err.Error(), "remote_addr", r.RemoteAddr)
 			fmt.Fprintln(w, "Error: invalid IP Address")
 			return
 		}
@@ -269,7 +268,7 @@ func checkHandler(generalLimiter Limiter, authLimiter Limiter, slogger *slog.Log
 
 		if err != nil {
 
-			slogger.Error("redis error", "error", err, "ip", r.RemoteAddr)
+			slogger.Error("redis error", "error", err, "ip", userIP)
 			proxy.ServeHTTP(w, r)
 
 		} else if b {
@@ -285,7 +284,7 @@ func checkHandler(generalLimiter Limiter, authLimiter Limiter, slogger *slog.Log
 			w.Header().Set("X-RateLimit-Remaining", strconv.FormatFloat(remainingTokens, 'f', 2, 64))
 
 			w.WriteHeader(http.StatusTooManyRequests)
-			slogger.Info("rate limit exceeded", "ip", r.RemoteAddr)
+			slogger.Info("rate limit exceeded", "ip", userIP)
 
 			fmt.Fprintln(w, "Too many requests, wait for token limiter to fill up")
 		}
@@ -319,6 +318,11 @@ func main() {
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(target)
 			r.Out.Host = target.Host
+			r.SetXForwarded()
+
+			if clientIP, err := getIP(r.In, configVars.trustedProxies); err == nil {
+				r.Out.Header.Set("X-Forwarded-For", clientIP)
+			}
 		},
 	}
 
